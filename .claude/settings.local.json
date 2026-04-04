@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(npx vitest:*)",
+      "Bash(git -C /Users/ericfan/projects/auto_portfolio log --oneline -5)",
+      "Bash(git -C /Users/ericfan/projects/auto_portfolio show a30e41a --stat)",
+      "Bash(git init:*)",
+      "Bash(git -C /Users/ericfan/projects/auto_portfolio diff 3ed8fca..60d47d3)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(git commit:*)",
+      "Bash(git -C /Users/ericfan/projects/auto_portfolio log --oneline -6)"
+    ]
+  }
+}
