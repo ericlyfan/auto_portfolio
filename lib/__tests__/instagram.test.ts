@@ -52,7 +52,13 @@ describe("createMediaContainer", () => {
 });
 
 describe("publishMedia", () => {
-  it("sends creation_id to publish endpoint and returns post id and permalink", async () => {
+  it("waits for media ready then publishes", async () => {
+    // First call: status check returns FINISHED
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status_code: "FINISHED" }),
+    });
+    // Second call: publish
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ id: "post-999" }),
@@ -60,7 +66,12 @@ describe("publishMedia", () => {
 
     const result = await publishMedia("container-789");
 
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "https://graph.facebook.com/v18.0/container-789?fields=status_code&access_token=test-token"
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
       "https://graph.facebook.com/v18.0/123456/media_publish",
       {
         method: "POST",
@@ -74,7 +85,13 @@ describe("publishMedia", () => {
     expect(result).toEqual({ id: "post-999" });
   });
 
-  it("throws on API error response", async () => {
+  it("throws on publish API error", async () => {
+    // Status check: FINISHED
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status_code: "FINISHED" }),
+    });
+    // Publish: error
     mockFetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({
@@ -84,6 +101,17 @@ describe("publishMedia", () => {
 
     await expect(publishMedia("container-789")).rejects.toThrow(
       "Instagram API error: Rate limit reached"
+    );
+  });
+
+  it("throws when media processing fails", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status_code: "ERROR" }),
+    });
+
+    await expect(publishMedia("container-789")).rejects.toThrow(
+      "Instagram API error: Media processing failed"
     );
   });
 });

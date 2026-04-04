@@ -27,11 +27,36 @@ export async function createMediaContainer(
   return data.id;
 }
 
+async function waitForMediaReady(
+  containerId: string,
+  maxAttempts = 10
+): Promise<void> {
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${containerId}?fields=status_code&access_token=${accessToken}`
+    );
+    const data = await response.json();
+
+    if (data.status_code === "FINISHED") return;
+    if (data.status_code === "ERROR") {
+      throw new Error(`Instagram API error: Media processing failed`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  throw new Error("Instagram API error: Media processing timed out");
+}
+
 export async function publishMedia(
   creationId: string
 ): Promise<{ id: string }> {
   const userId = process.env.INSTAGRAM_USER_ID;
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  await waitForMediaReady(creationId);
 
   const response = await fetch(
     `https://graph.facebook.com/v18.0/${userId}/media_publish`,
