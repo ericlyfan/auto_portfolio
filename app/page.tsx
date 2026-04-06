@@ -11,17 +11,11 @@ type Status =
   | { state: "success"; postId: string }
   | { state: "error"; message: string };
 
-type MismatchedImage = {
-  index: number;
-  recipe: string;
-};
-
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [status, setStatus] = useState<Status>({ state: "idle" });
-  const [mismatchedImages, setMismatchedImages] = useState<MismatchedImage[]>([]);
   const [uploadedPaths, setUploadedPaths] = useState<string[] | null>(null);
 
   // Upload files immediately on selection → extract recipes → fill caption
@@ -55,16 +49,36 @@ export default function Home() {
 
       setUploadedPaths(uploadData.imagePaths);
 
-      // Auto-fill caption from recipe if caption is empty
-      if (uploadData.primaryRecipe && !caption) {
-        setCaption(uploadData.primaryRecipe);
-      }
+      // Auto-fill caption from recipes if caption is empty
+      if (!caption) {
+        const recipes: (string | null)[] = uploadData.recipes ?? [];
+        const uniqueRecipes = new Map<string, number[]>();
 
-      // Show mismatch warning if applicable
-      if (uploadData.mismatchedImages?.length > 0) {
-        setMismatchedImages(uploadData.mismatchedImages);
-      } else {
-        setMismatchedImages([]);
+        recipes.forEach((recipe: string | null, i: number) => {
+          if (!recipe) return;
+          const existing = uniqueRecipes.get(recipe);
+          if (existing) {
+            existing.push(i + 1);
+          } else {
+            uniqueRecipes.set(recipe, [i + 1]);
+          }
+        });
+
+        if (uniqueRecipes.size === 1) {
+          // All images share the same recipe — show it plain
+          setCaption([...uniqueRecipes.keys()][0]);
+        } else if (uniqueRecipes.size > 1) {
+          // Multiple recipes — group images by recipe
+          const parts: string[] = [];
+          for (const [recipe, imageNums] of uniqueRecipes) {
+            const label = imageNums.length === 1
+              ? `Image ${imageNums[0]}`
+              : `Images ${imageNums.join(", ")}`;
+            const simName = recipe.split("\n")[0];
+            parts.push(`${label} (${simName}):\n${recipe}`);
+          }
+          setCaption(parts.join("\n\n---\n\n"));
+        }
       }
 
       setStatus({ state: "idle" });
@@ -80,7 +94,6 @@ export default function Home() {
     const next = files.filter((_, i) => i !== index);
     setFiles(next);
     setPreviews(next.map((f) => URL.createObjectURL(f)));
-    setMismatchedImages([]);
     if (next.length === 0) {
       setUploadedPaths(null);
     }
@@ -122,7 +135,6 @@ export default function Home() {
       setFiles([]);
       setPreviews([]);
       setCaption("");
-      setMismatchedImages([]);
       setUploadedPaths(null);
     } catch (err) {
       setStatus({
@@ -130,14 +142,6 @@ export default function Home() {
         message: err instanceof Error ? err.message : "Something went wrong",
       });
     }
-  }
-
-  function appendMismatchedRecipes() {
-    const additions = mismatchedImages
-      .map((m) => `\n\n---\nImage ${m.index + 1}:\n${m.recipe}`)
-      .join("");
-    setCaption((prev) => prev + additions);
-    setMismatchedImages([]);
   }
 
   const isProcessing =
@@ -224,34 +228,6 @@ export default function Home() {
               placeholder="Write a caption... (auto-filled from Fujifilm recipe if detected)"
             />
           </div>
-
-          {/* Mismatch warning */}
-          {mismatchedImages.length > 0 && (
-            <div className="rounded bg-yellow-900/50 border border-yellow-700 p-3 text-sm text-yellow-300 space-y-2">
-              <p>
-                {mismatchedImages.map((m) => `Image ${m.index + 1}`).join(", ")}{" "}
-                {mismatchedImages.length === 1 ? "uses" : "use"} a different
-                recipe (
-                {mismatchedImages[0].recipe.split("\n")[0]}).
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={appendMismatchedRecipes}
-                  className="text-xs bg-yellow-800 px-2 py-1 rounded hover:bg-yellow-700"
-                >
-                  Include all recipes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMismatchedImages([])}
-                  className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Submit */}
           <button
