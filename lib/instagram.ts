@@ -27,6 +27,68 @@ export async function createMediaContainer(
   return data.id;
 }
 
+export async function createCarouselItemContainer(
+  imageUrl: string
+): Promise<string> {
+  const userId = process.env.INSTAGRAM_USER_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${userId}/media`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        is_carousel_item: true,
+        access_token: accessToken,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Instagram API error: ${data.error?.message ?? "Unknown error"}`
+    );
+  }
+
+  return data.id;
+}
+
+export async function createCarouselContainer(
+  childIds: string[],
+  caption: string
+): Promise<string> {
+  const userId = process.env.INSTAGRAM_USER_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${userId}/media`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        media_type: "CAROUSEL",
+        children: childIds,
+        caption,
+        access_token: accessToken,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Instagram API error: ${data.error?.message ?? "Unknown error"}`
+    );
+  }
+
+  return data.id;
+}
+
 async function waitForMediaReady(
   containerId: string,
   maxAttempts = 10
