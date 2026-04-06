@@ -82,21 +82,23 @@ export default function Home() {
       }
 
       // Auto-fill caption from recipe if caption is empty
-      if (uploadData.primaryRecipe && !caption) {
-        setCaption(uploadData.primaryRecipe);
+      const recipeCaption = !caption && uploadData.primaryRecipe
+        ? uploadData.primaryRecipe
+        : caption;
+      if (recipeCaption !== caption) {
+        setCaption(recipeCaption);
       }
 
-      // Show mismatch warning if applicable
+      // Show mismatch warning if applicable — pause for user review
       if (uploadData.mismatchedImages?.length > 0) {
         setMismatchedImages(uploadData.mismatchedImages);
         setStatus({ state: "idle" });
-        // Store image paths for later publish
         setUploadedPaths(uploadData.imagePaths);
         return;
       }
 
-      // Step 2: Publish
-      await doPublish(uploadData.imagePaths, uploadData.primaryRecipe);
+      // Step 2: Publish (use recipeCaption since setCaption hasn't flushed yet)
+      await doPublish(uploadData.imagePaths, recipeCaption);
     } catch (err) {
       setStatus({
         state: "error",
@@ -107,9 +109,9 @@ export default function Home() {
 
   const [uploadedPaths, setUploadedPaths] = useState<string[] | null>(null);
 
-  async function doPublish(imagePaths: string[], recipe?: string | null) {
+  async function doPublish(imagePaths: string[], captionOverride?: string) {
     setStatus({ state: "publishing" });
-    const finalCaption = caption || recipe || "";
+    const finalCaption = captionOverride || caption || "";
 
     const publishRes = await fetch("/api/publish", {
       method: "POST",
