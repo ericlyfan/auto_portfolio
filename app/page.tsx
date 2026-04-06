@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useCallback } from "react";
+import { useState, FormEvent } from "react";
 
 const MAX_IMAGES = 10;
 
@@ -21,55 +21,27 @@ export default function Home() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [status, setStatus] = useState<Status>({ state: "idle" });
-  const [mismatchedImages, setMismatchedImages] = useState<MismatchedImage[]>(
-    []
-  );
+  const [mismatchedImages, setMismatchedImages] = useState<MismatchedImage[]>([]);
+  const [uploadedPaths, setUploadedPaths] = useState<string[] | null>(null);
 
-  const addFiles = useCallback(
-    (newFiles: FileList | null) => {
-      if (!newFiles) return;
-      const incoming = Array.from(newFiles);
-      const combined = [...files, ...incoming].slice(0, MAX_IMAGES);
+  // Upload files immediately on selection → extract recipes → fill caption
+  async function addFiles(newFiles: FileList | null) {
+    if (!newFiles || newFiles.length === 0) return;
 
-      setFiles(combined);
-      setPreviews(combined.map((f) => URL.createObjectURL(f)));
-    },
-    [files]
-  );
+    const incoming = Array.from(newFiles);
+    const combined = [...files, ...incoming].slice(0, MAX_IMAGES);
 
-  function removeFile(index: number) {
-    const next = files.filter((_, i) => i !== index);
-    setFiles(next);
-    setPreviews(next.map((f) => URL.createObjectURL(f)));
-    setMismatchedImages([]);
-  }
+    setFiles(combined);
+    setPreviews(combined.map((f) => URL.createObjectURL(f)));
 
-  function moveFile(from: number, to: number) {
-    if (to < 0 || to >= files.length) return;
-    const next = [...files];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    setFiles(next);
-    setPreviews(next.map((f) => URL.createObjectURL(f)));
-    setMismatchedImages([]);
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-
-    if (files.length === 0) {
-      setStatus({ state: "error", message: "Please select at least one image." });
-      return;
+    // Upload all files to extract EXIF recipes
+    setStatus({ state: "uploading" });
+    const formData = new FormData();
+    for (const file of combined) {
+      formData.append("files", file);
     }
 
     try {
-      // Step 1: Upload
-      setStatus({ state: "uploading" });
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append("files", file);
-      }
-
       const uploadRes = await fetch("/api/upload", {
         method: "POST",
         body: formData,
@@ -81,56 +53,83 @@ export default function Home() {
         return;
       }
 
+      setUploadedPaths(uploadData.imagePaths);
+
       // Auto-fill caption from recipe if caption is empty
-      const recipeCaption = !caption && uploadData.primaryRecipe
-        ? uploadData.primaryRecipe
-        : caption;
-      if (recipeCaption !== caption) {
-        setCaption(recipeCaption);
+      if (uploadData.primaryRecipe && !caption) {
+        setCaption(uploadData.primaryRecipe);
       }
 
-      // Show mismatch warning if applicable — pause for user review
+      // Show mismatch warning if applicable
       if (uploadData.mismatchedImages?.length > 0) {
         setMismatchedImages(uploadData.mismatchedImages);
-        setStatus({ state: "idle" });
-        setUploadedPaths(uploadData.imagePaths);
+      } else {
+        setMismatchedImages([]);
+      }
+
+      setStatus({ state: "idle" });
+    } catch (err) {
+      setStatus({
+        state: "error",
+        message: err instanceof Error ? err.message : "Upload failed",
+      });
+    }
+  }
+
+  function removeFile(index: number) {
+    const next = files.filter((_, i) => i !== index);
+    setFiles(next);
+    setPreviews(next.map((f) => URL.createObjectURL(f)));
+    setMismatchedImages([]);
+    if (next.length === 0) {
+      setUploadedPaths(null);
+    }
+  }
+
+  function moveFile(from: number, to: number) {
+    if (to < 0 || to >= files.length) return;
+    const next = [...files];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setFiles(next);
+    setPreviews(next.map((f) => URL.createObjectURL(f)));
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+
+    if (!uploadedPaths || uploadedPaths.length === 0) {
+      setStatus({ state: "error", message: "Please select at least one image." });
+      return;
+    }
+
+    setStatus({ state: "publishing" });
+
+    try {
+      const publishRes = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagePaths: uploadedPaths, caption }),
+      });
+      const publishData = await publishRes.json();
+
+      if (!publishRes.ok) {
+        setStatus({ state: "error", message: publishData.error });
         return;
       }
 
-      // Step 2: Publish (use recipeCaption since setCaption hasn't flushed yet)
-      await doPublish(uploadData.imagePaths, recipeCaption);
+      setStatus({ state: "success", postId: publishData.postId });
+      setFiles([]);
+      setPreviews([]);
+      setCaption("");
+      setMismatchedImages([]);
+      setUploadedPaths(null);
     } catch (err) {
       setStatus({
         state: "error",
         message: err instanceof Error ? err.message : "Something went wrong",
       });
     }
-  }
-
-  const [uploadedPaths, setUploadedPaths] = useState<string[] | null>(null);
-
-  async function doPublish(imagePaths: string[], captionOverride?: string) {
-    setStatus({ state: "publishing" });
-    const finalCaption = captionOverride || caption || "";
-
-    const publishRes = await fetch("/api/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imagePaths, caption: finalCaption }),
-    });
-    const publishData = await publishRes.json();
-
-    if (!publishRes.ok) {
-      setStatus({ state: "error", message: publishData.error });
-      return;
-    }
-
-    setStatus({ state: "success", postId: publishData.postId });
-    setFiles([]);
-    setPreviews([]);
-    setCaption("");
-    setMismatchedImages([]);
-    setUploadedPaths(null);
   }
 
   function appendMismatchedRecipes() {
@@ -139,18 +138,6 @@ export default function Home() {
       .join("");
     setCaption((prev) => prev + additions);
     setMismatchedImages([]);
-  }
-
-  async function handlePublishAfterReview() {
-    if (!uploadedPaths) return;
-    try {
-      await doPublish(uploadedPaths);
-    } catch (err) {
-      setStatus({
-        state: "error",
-        message: err instanceof Error ? err.message : "Something went wrong",
-      });
-    }
   }
 
   const isProcessing =
@@ -257,40 +244,27 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={handlePublishAfterReview}
+                  onClick={() => setMismatchedImages([])}
                   className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
                 >
-                  Publish as-is
+                  Dismiss
                 </button>
               </div>
             </div>
           )}
 
           {/* Submit */}
-          {!uploadedPaths ? (
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="w-full py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {status.state === "uploading"
-                ? "Uploading..."
-                : status.state === "publishing"
-                  ? "Publishing..."
-                  : "Publish"}
-            </button>
-          ) : (
-            !mismatchedImages.length && (
-              <button
-                type="button"
-                onClick={handlePublishAfterReview}
-                disabled={isProcessing}
-                className="w-full py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {status.state === "publishing" ? "Publishing..." : "Publish"}
-              </button>
-            )
-          )}
+          <button
+            type="submit"
+            disabled={isProcessing || !uploadedPaths}
+            className="w-full py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {status.state === "uploading"
+              ? "Uploading..."
+              : status.state === "publishing"
+                ? "Publishing..."
+                : "Publish"}
+          </button>
         </form>
 
         {status.state === "success" && (
