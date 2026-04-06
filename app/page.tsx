@@ -74,8 +74,7 @@ export default function Home() {
             const label = imageNums.length === 1
               ? `Image ${imageNums[0]}`
               : `Images ${imageNums.join(", ")}`;
-            const simName = recipe.split("\n")[0];
-            parts.push(`${label} (${simName}):\n${recipe}`);
+            parts.push(`${label}:\n${recipe}`);
           }
           setCaption(parts.join("\n\n---\n\n"));
         }
