@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, FormEvent } from "react";
 
 const MAX_IMAGES = 10;
@@ -11,6 +12,33 @@ type Status =
   | { state: "success"; postId: string }
   | { state: "error"; message: string };
 
+function buildCaptionFromRecipes(recipes: (string | null)[]): string {
+  const uniqueRecipes = new Map<string, number[]>();
+
+  recipes.forEach((recipe, i) => {
+    if (!recipe) return;
+    const existing = uniqueRecipes.get(recipe);
+    if (existing) {
+      existing.push(i + 1);
+    } else {
+      uniqueRecipes.set(recipe, [i + 1]);
+    }
+  });
+
+  if (uniqueRecipes.size === 1) {
+    return [...uniqueRecipes.keys()][0];
+  } else if (uniqueRecipes.size > 1) {
+    const parts: string[] = [];
+    for (const [recipe, imageNums] of uniqueRecipes) {
+      const label = imageNums.length === 1 ? `Image ${imageNums[0]}` : `Images ${imageNums.join(", ")}`;
+      parts.push(`${label}:\n${recipe}`);
+    }
+    return parts.join("\n\n---\n\n");
+  }
+
+  return "";
+}
+
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -18,20 +46,17 @@ export default function Home() {
   const [status, setStatus] = useState<Status>({ state: "idle" });
   const [uploadedPaths, setUploadedPaths] = useState<string[] | null>(null);
 
-  // Upload files immediately on selection → extract recipes → fill caption
-  async function addFiles(newFiles: FileList | null) {
-    if (!newFiles || newFiles.length === 0) return;
+  // Upload files and extract recipes, always regenerates caption
+  async function uploadAndExtract(fileList: File[]) {
+    if (fileList.length === 0) {
+      setUploadedPaths(null);
+      setCaption("");
+      return;
+    }
 
-    const incoming = Array.from(newFiles);
-    const combined = [...files, ...incoming].slice(0, MAX_IMAGES);
-
-    setFiles(combined);
-    setPreviews(combined.map((f) => URL.createObjectURL(f)));
-
-    // Upload all files to extract EXIF recipes
     setStatus({ state: "uploading" });
     const formData = new FormData();
-    for (const file of combined) {
+    for (const file of fileList) {
       formData.append("files", file);
     }
 
@@ -48,38 +73,7 @@ export default function Home() {
       }
 
       setUploadedPaths(uploadData.imagePaths);
-
-      // Auto-fill caption from recipes if caption is empty
-      if (!caption) {
-        const recipes: (string | null)[] = uploadData.recipes ?? [];
-        const uniqueRecipes = new Map<string, number[]>();
-
-        recipes.forEach((recipe: string | null, i: number) => {
-          if (!recipe) return;
-          const existing = uniqueRecipes.get(recipe);
-          if (existing) {
-            existing.push(i + 1);
-          } else {
-            uniqueRecipes.set(recipe, [i + 1]);
-          }
-        });
-
-        if (uniqueRecipes.size === 1) {
-          // All images share the same recipe — show it plain
-          setCaption([...uniqueRecipes.keys()][0]);
-        } else if (uniqueRecipes.size > 1) {
-          // Multiple recipes — group images by recipe
-          const parts: string[] = [];
-          for (const [recipe, imageNums] of uniqueRecipes) {
-            const label = imageNums.length === 1
-              ? `Image ${imageNums[0]}`
-              : `Images ${imageNums.join(", ")}`;
-            parts.push(`${label}:\n${recipe}`);
-          }
-          setCaption(parts.join("\n\n---\n\n"));
-        }
-      }
-
+      setCaption(buildCaptionFromRecipes(uploadData.recipes ?? []));
       setStatus({ state: "idle" });
     } catch (err) {
       setStatus({
@@ -89,22 +83,30 @@ export default function Home() {
     }
   }
 
-  function removeFile(index: number) {
+  async function addFiles(newFiles: FileList | null) {
+    if (!newFiles || newFiles.length === 0) return;
+    const incoming = Array.from(newFiles);
+    const combined = [...files, ...incoming].slice(0, MAX_IMAGES);
+    setFiles(combined);
+    setPreviews(combined.map((f) => URL.createObjectURL(f)));
+    await uploadAndExtract(combined);
+  }
+
+  async function removeFile(index: number) {
     const next = files.filter((_, i) => i !== index);
     setFiles(next);
     setPreviews(next.map((f) => URL.createObjectURL(f)));
-    if (next.length === 0) {
-      setUploadedPaths(null);
-    }
+    await uploadAndExtract(next);
   }
 
-  function moveFile(from: number, to: number) {
+  async function moveFile(from: number, to: number) {
     if (to < 0 || to >= files.length) return;
     const next = [...files];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     setFiles(next);
     setPreviews(next.map((f) => URL.createObjectURL(f)));
+    await uploadAndExtract(next);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -143,15 +145,12 @@ export default function Home() {
     }
   }
 
-  const isProcessing =
-    status.state === "uploading" || status.state === "publishing";
+  const isProcessing = status.state === "uploading" || status.state === "publishing";
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
       <div className="w-full max-w-lg space-y-6">
-        <h1 className="text-2xl font-bold text-white text-center">
-          Publish to Instagram
-        </h1>
+        <h1 className="text-2xl font-bold text-white text-center">Publish to Instagram</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* File picker */}
@@ -176,9 +175,12 @@ export default function Home() {
             <div className="grid grid-cols-5 gap-2">
               {previews.map((src, i) => (
                 <div key={i} className="relative group">
-                  <img
+                  <Image
                     src={src}
                     alt={`Preview ${i + 1}`}
+                    width={300}
+                    height={300}
+                    unoptimized
                     className="w-full aspect-square object-cover rounded"
                   />
                   <div className="absolute top-0 right-0 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -249,9 +251,7 @@ export default function Home() {
         )}
 
         {status.state === "error" && (
-          <div className="rounded bg-red-900/50 border border-red-700 p-3 text-sm text-red-300">
-            {status.message}
-          </div>
+          <div className="rounded bg-red-900/50 border border-red-700 p-3 text-sm text-red-300">{status.message}</div>
         )}
       </div>
     </main>
