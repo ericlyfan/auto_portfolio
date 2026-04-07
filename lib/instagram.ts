@@ -152,12 +152,12 @@ export type IGMedia = {
 };
 
 export type IGMediaInsights = {
-  impressions: number;
   reach: number;
   likes: number;
   saves: number;
   comments: number;
   shares: number;
+  reposts: number;
 };
 
 export async function getMediaList(limit: number): Promise<IGMedia[]> {
@@ -190,7 +190,7 @@ export async function getMediaInsights(
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
 
   const params = new URLSearchParams({
-    metric: "impressions,reach,likes,saved,comments_count,shares",
+    metric: "reach,likes,saved,comments,shares,reposts",
     access_token: accessToken!,
   });
 
@@ -215,12 +215,12 @@ export async function getMediaInsights(
   }
 
   return {
-    impressions: map.impressions ?? 0,
     reach: map.reach ?? 0,
     likes: map.likes ?? 0,
     saves: map.saved ?? 0,
-    comments: map.comments_count ?? 0,
+    comments: map.comments ?? 0,
     shares: map.shares ?? 0,
+    reposts: map.reposts ?? 0,
   };
 }
 
@@ -229,7 +229,12 @@ export type IGAccountInfo = {
   followersCount: number;
   mediaCount: number;
   reach28d: number;
-  profileViews28d: number;
+  profileViews: number;
+  followersGained: number;
+  accountsEngaged: number;
+  totalInteractions: number;
+  likes: number;
+  comments: number;
 };
 
 export async function getAccountInfo(): Promise<IGAccountInfo> {
@@ -241,62 +246,91 @@ export async function getAccountInfo(): Promise<IGAccountInfo> {
     access_token: accessToken!,
   });
 
-  const insightParams = new URLSearchParams({
-    metric: "reach,profile_views",
+  const reachParams = new URLSearchParams({
+    metric: "reach",
     period: "days_28",
     access_token: accessToken!,
   });
 
-  const [accountRes, insightRes] = await Promise.all([
+  const followerCountParams = new URLSearchParams({
+    metric: "follower_count",
+    period: "day",
+    access_token: accessToken!,
+  });
+
+  const dailyTotalParams = new URLSearchParams({
+    metric: "profile_views,accounts_engaged,total_interactions,likes,comments",
+    metric_type: "total_value",
+    period: "day",
+    access_token: accessToken!,
+  });
+
+  const [accountRes, reachRes, followerCountRes, dailyTotalRes] = await Promise.all([
     fetch(`https://graph.facebook.com/v18.0/${userId}?${accountParams}`),
-    fetch(
-      `https://graph.facebook.com/v18.0/${userId}/insights?${insightParams}`
-    ),
+    fetch(`https://graph.facebook.com/v18.0/${userId}/insights?${reachParams}`),
+    fetch(`https://graph.facebook.com/v18.0/${userId}/insights?${followerCountParams}`),
+    fetch(`https://graph.facebook.com/v18.0/${userId}/insights?${dailyTotalParams}`),
   ]);
 
   const accountData = await accountRes.json();
   if (!accountRes.ok) {
-    throw new Error(
-      `Instagram API error: ${accountData.error?.message ?? "Unknown error"}`
-    );
+    throw new Error(`Instagram API error: ${accountData.error?.message ?? "Unknown error"}`);
   }
 
-  const insightData = await insightRes.json();
-  if (!insightRes.ok) {
-    throw new Error(
-      `Instagram API error: ${insightData.error?.message ?? "Unknown error"}`
-    );
+  const reachData = await reachRes.json();
+  if (!reachRes.ok) {
+    throw new Error(`Instagram API error: ${reachData.error?.message ?? "Unknown error"}`);
   }
 
-  const insightMap: Record<string, number> = {};
-  for (const item of insightData.data as Array<{
-    name: string;
-    value?: number;
-    values?: Array<{ value: number }>;
-  }>) {
-    insightMap[item.name] =
-      item.value ?? item.values?.[item.values.length - 1]?.value ?? 0;
+  const followerCountData = await followerCountRes.json();
+  if (!followerCountRes.ok) {
+    throw new Error(`Instagram API error: ${followerCountData.error?.message ?? "Unknown error"}`);
+  }
+
+  const dailyTotalData = await dailyTotalRes.json();
+  if (!dailyTotalRes.ok) {
+    throw new Error(`Instagram API error: ${dailyTotalData.error?.message ?? "Unknown error"}`);
+  }
+
+  const reachItem = (reachData.data as Array<{ values?: Array<{ value: number }> }>)[0];
+  const reach28d = reachItem?.values?.[reachItem.values.length - 1]?.value ?? 0;
+
+  const followerItem = (followerCountData.data as Array<{ values?: Array<{ value: number }> }>)[0];
+  const followersGained = followerItem?.values?.[followerItem.values.length - 1]?.value ?? 0;
+
+  const dailyMap: Record<string, number> = {};
+  for (const item of dailyTotalData.data as Array<{ name: string; total_value?: { value: number } }>) {
+    dailyMap[item.name] = item.total_value?.value ?? 0;
   }
 
   return {
     username: accountData.username,
     followersCount: accountData.followers_count,
     mediaCount: accountData.media_count,
-    reach28d: insightMap.reach ?? 0,
-    profileViews28d: insightMap.profile_views ?? 0,
+    reach28d,
+    followersGained,
+    profileViews: dailyMap.profile_views ?? 0,
+    accountsEngaged: dailyMap.accounts_engaged ?? 0,
+    totalInteractions: dailyMap.total_interactions ?? 0,
+    likes: dailyMap.likes ?? 0,
+    comments: dailyMap.comments ?? 0,
   };
 }
 
 export async function refreshToken(): Promise<string> {
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
 
   const params = new URLSearchParams({
-    grant_type: "ig_refresh_token",
-    access_token: accessToken!,
+    grant_type: "fb_exchange_token",
+    client_id: appId!,
+    client_secret: appSecret!,
+    fb_exchange_token: accessToken!,
   });
 
   const response = await fetch(
-    `https://graph.instagram.com/refresh_access_token?${params}`
+    `https://graph.facebook.com/oauth/access_token?${params}`
   );
   const data = await response.json();
 

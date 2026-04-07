@@ -7,7 +7,12 @@ type AccountData = {
   followersCount: number;
   mediaCount: number;
   reach28d: number;
-  profileViews28d: number;
+  profileViews: number;
+  followersGained: number;
+  accountsEngaged: number;
+  totalInteractions: number;
+  likes: number;
+  comments: number;
   tokenDaysLeft: number | null;
 };
 
@@ -87,23 +92,23 @@ export default function StatsTab() {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <p className="text-xs text-gray-500 uppercase tracking-wider">
-          Account
-        </p>
+        <p className="text-xs text-gray-500 uppercase tracking-wider">Account</p>
         <div className="grid grid-cols-2 gap-3">
-          <StatTile
-            value={formatCount(account.followersCount)}
-            label="followers"
-          />
-          <StatTile
-            value={formatCount(account.reach28d)}
-            label="reach (28d)"
-          />
-          <StatTile
-            value={formatCount(account.profileViews28d)}
-            label="profile views"
-          />
+          <StatTile value={formatCount(account.followersCount)} label="followers" />
+          <StatTile value={`+${formatCount(account.followersGained)}`} label="followers gained (today)" />
+          <StatTile value={formatCount(account.reach28d)} label="reach (28d)" />
           <StatTile value={String(account.mediaCount)} label="posts" />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500 uppercase tracking-wider">Today</p>
+        <div className="grid grid-cols-2 gap-3">
+          <StatTile value={formatCount(account.totalInteractions)} label="total interactions" />
+          <StatTile value={formatCount(account.accountsEngaged)} label="accounts engaged" />
+          <StatTile value={formatCount(account.likes)} label="likes" />
+          <StatTile value={formatCount(account.comments)} label="comments" />
+          <StatTile value={formatCount(account.profileViews)} label="profile visits" />
         </div>
       </div>
 

@@ -1,15 +1,15 @@
 # auto_portfolio
 
-Mobile-first Instagram publishing tool. Pick a photo, write a caption, post — straight to Instagram via Graph API.
+Personal Instagram publishing tool. Pick photos, write a caption, post — straight to Instagram via Graph API. Runs locally in dev mode for personal use only.
 
 ---
 
 ## Stack
 
 - **Next.js 14** (App Router) + **Tailwind CSS**
-- **Supabase** — Auth, Storage (temp image hosting for IG API), PostgreSQL
+- **Supabase** — Storage (temp image hosting for IG API), PostgreSQL
 - **Instagram Graph API** — two-step publish flow
-- **Vercel** — deployment
+- **Local dev** — no deployment, no auth needed (personal use only)
 
 ## Env Vars
 
@@ -28,24 +28,17 @@ INSTAGRAM_ACCESS_TOKEN=
 ```
 auto_portfolio/
 ├── app/
-│   ├── admin/
-│   │   ├── page.tsx              # Dashboard / post history
-│   │   ├── upload/page.tsx       # Upload + publish interface
-│   │   └── drafts/page.tsx       # Draft management (v1.5)
+│   ├── page.tsx                  # Upload + publish interface
 │   └── api/
 │       ├── upload/route.ts       # Upload file to Supabase Storage
 │       ├── publish/route.ts      # Instagram API + save record
 │       ├── posts/route.ts        # Fetch post history
 │       └── instagram/
 │           └── refresh/route.ts  # Token refresh
-├── components/
-│   ├── AdminUploader.tsx
-│   ├── PublishForm.tsx
-│   └── PostHistory.tsx
 ├── lib/
 │   ├── supabase.ts
+│   ├── exif.ts                   # Fujifilm recipe EXIF extraction
 │   └── instagram.ts              # IG API helpers
-└── middleware.ts                  # Auth guard for /admin
 ```
 
 ---
@@ -101,35 +94,34 @@ Image must be publicly accessible at publish time. Supabase public bucket handle
 
 ## Build Phases
 
-**Phase 1 — Foundation**
+**Phase 1 — Foundation** ✓
 
-- [ ] Init Next.js project
-- [ ] Supabase project setup (DB + storage bucket)
-- [ ] Auth + admin login page
-- [ ] File upload flow → Supabase Storage
+- [x] Init Next.js project
+- [x] Supabase project setup (DB + storage bucket)
+- [x] File upload flow → Supabase Storage
 
-**Phase 2 — Instagram Integration**
+**Phase 2 — Instagram Integration** ✓
 
-- [ ] Meta Developer app + long-lived token
-- [ ] Publish API route (2-step flow)
-- [ ] Wire publish button + save post record
-- [ ] Error handling (fail gracefully)
+- [x] Meta Developer app + long-lived token
+- [x] Publish API route (2-step flow)
+- [x] Wire publish button + save post record
+- [x] Error handling (fail gracefully)
+- [x] Multi-photo / carousel support (up to 10 images)
+- [x] Fujifilm EXIF recipe auto-caption
 
-**Phase 3 — Polish & Deploy**
+**Phase 3 — Polish**
 
+- [x] Loading + success/error states
 - [ ] Post history view
-- [ ] Loading + success/error states
-- [ ] Deploy to Vercel + end-to-end mobile test
+- [ ] Token refresh route (`/api/instagram/refresh`) — tokens expire every 60 days
 
 **Phase 4 — V1.5**
 
 - [ ] Draft mode
-- [ ] Carousel posts
 - [ ] Scheduled posting
-- [ ] Multi-photo upload
 
 ---
 
 ## MVP Scope
 
-Admin-only app (no public site). Single photo upload, caption, tags, one-tap publish to Instagram. Post history log. Public portfolio is a future V2 consideration.
+Personal local tool, no auth required. Multi-photo upload, caption auto-filled from Fujifilm EXIF recipe data, one-tap publish to Instagram. Post history log. No public deployment planned.

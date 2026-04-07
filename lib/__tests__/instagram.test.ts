@@ -8,6 +8,8 @@ vi.stubGlobal("fetch", mockFetch);
 beforeEach(() => {
   vi.stubEnv("INSTAGRAM_USER_ID", "123456");
   vi.stubEnv("INSTAGRAM_ACCESS_TOKEN", "test-token");
+  vi.stubEnv("FACEBOOK_APP_ID", "test-app-id");
+  vi.stubEnv("FACEBOOK_APP_SECRET", "test-app-secret");
   mockFetch.mockReset();
 });
 
@@ -258,12 +260,12 @@ describe("getMediaInsights", () => {
       ok: true,
       json: async () => ({
         data: [
-          { name: "impressions", values: [{ value: 200 }] },
           { name: "reach", values: [{ value: 150 }] },
           { name: "likes", values: [{ value: 12 }] },
           { name: "saved", values: [{ value: 4 }] },
-          { name: "comments_count", values: [{ value: 2 }] },
+          { name: "comments", values: [{ value: 2 }] },
           { name: "shares", values: [{ value: 1 }] },
+          { name: "reposts", values: [{ value: 3 }] },
         ],
       }),
     });
@@ -271,15 +273,15 @@ describe("getMediaInsights", () => {
     const result = await getMediaInsights("media-1");
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://graph.facebook.com/v18.0/media-1/insights?metric=impressions%2Creach%2Clikes%2Csaved%2Ccomments_count%2Cshares&access_token=test-token"
+      "https://graph.facebook.com/v18.0/media-1/insights?metric=reach%2Clikes%2Csaved%2Ccomments%2Cshares%2Creposts&access_token=test-token"
     );
     expect(result).toEqual({
-      impressions: 200,
       reach: 150,
       likes: 12,
       saves: 4,
       comments: 2,
       shares: 1,
+      reposts: 3,
     });
   });
 
@@ -296,23 +298,32 @@ describe("getMediaInsights", () => {
 });
 
 describe("getAccountInfo", () => {
-  it("fetches account fields and 28-day insights and returns merged object", async () => {
-    // First call: account fields
+  it("fetches account fields and insights and returns merged object", async () => {
+    // Call 1: account fields
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({
-        username: "ericfan",
-        followers_count: 4200,
-        media_count: 89,
-      }),
+      json: async () => ({ username: "ericfan", followers_count: 4200, media_count: 89 }),
     });
-    // Second call: insights
+    // Call 2: reach (days_28, time-series)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ name: "reach", values: [{ value: 18400 }] }] }),
+    });
+    // Call 3: follower_count (day, time-series)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ name: "follower_count", values: [{ value: 12 }] }] }),
+    });
+    // Call 4: daily total_value metrics
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         data: [
-          { name: "reach", values: [{ value: 18400 }] },
-          { name: "profile_views", values: [{ value: 342 }] },
+          { name: "profile_views", total_value: { value: 342 } },
+          { name: "accounts_engaged", total_value: { value: 55 } },
+          { name: "total_interactions", total_value: { value: 130 } },
+          { name: "likes", total_value: { value: 80 } },
+          { name: "comments", total_value: { value: 10 } },
         ],
       }),
     });
@@ -325,14 +336,27 @@ describe("getAccountInfo", () => {
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
-      "https://graph.facebook.com/v18.0/123456/insights?metric=reach%2Cprofile_views&period=days_28&access_token=test-token"
+      "https://graph.facebook.com/v18.0/123456/insights?metric=reach&period=days_28&access_token=test-token"
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
+      "https://graph.facebook.com/v18.0/123456/insights?metric=follower_count&period=day&access_token=test-token"
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      4,
+      "https://graph.facebook.com/v18.0/123456/insights?metric=profile_views%2Caccounts_engaged%2Ctotal_interactions%2Clikes%2Ccomments&metric_type=total_value&period=day&access_token=test-token"
     );
     expect(result).toEqual({
       username: "ericfan",
       followersCount: 4200,
       mediaCount: 89,
       reach28d: 18400,
-      profileViews28d: 342,
+      followersGained: 12,
+      profileViews: 342,
+      accountsEngaged: 55,
+      totalInteractions: 130,
+      likes: 80,
+      comments: 10,
     });
   });
 
@@ -351,16 +375,14 @@ describe("getAccountInfo", () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          username: "ericfan",
-          followers_count: 4200,
-          media_count: 89,
-        }),
+        json: async () => ({ username: "ericfan", followers_count: 4200, media_count: 89 }),
       })
       .mockResolvedValueOnce({
         ok: false,
         json: async () => ({ error: { message: "Insights unavailable" } }),
-      });
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
 
     await expect(getAccountInfo()).rejects.toThrow(
       "Instagram API error: Insights unavailable"
@@ -382,7 +404,7 @@ describe("refreshToken", () => {
     const result = await refreshToken();
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=test-token"
+      "https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=test-app-id&client_secret=test-app-secret&fb_exchange_token=test-token"
     );
     expect(result).toBe("new-token-abc");
   });

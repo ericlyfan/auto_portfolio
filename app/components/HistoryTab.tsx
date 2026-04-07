@@ -14,6 +14,8 @@ type Post = {
   saves: number;
   reach: number;
   comments: number;
+  shares: number;
+  reposts: number;
 };
 
 function formatDate(iso: string): string {
@@ -39,9 +41,9 @@ function PostRow({ post }: { post: Post }) {
       href={post.permalink}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex gap-3 items-center bg-gray-900 rounded-lg p-3 hover:bg-gray-800 transition-colors"
+      className="flex gap-4 items-center bg-gray-900 rounded-lg p-3 sm:p-4 hover:bg-gray-800 transition-colors"
     >
-      <div className="relative w-10 h-10 flex-shrink-0">
+      <div className="relative w-14 h-14 sm:w-20 sm:h-20 flex-shrink-0">
         <Image
           src={post.mediaUrl}
           alt={captionSnippet}
@@ -51,14 +53,16 @@ function PostRow({ post }: { post: Post }) {
         />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-white text-sm truncate">{captionSnippet}</p>
-        <p className="text-gray-500 text-xs mt-0.5">{formatDate(post.timestamp)}</p>
+        <p className="text-white text-sm sm:text-base truncate">{captionSnippet}</p>
+        <p className="text-gray-500 text-xs sm:text-sm mt-1">{formatDate(post.timestamp)}</p>
       </div>
-      <div className="text-right flex-shrink-0 space-y-0.5">
-        <p className="text-gray-400 text-xs">
-          ♥ {formatCount(post.likes)} &nbsp; 🔖 {formatCount(post.saves)}
+      <div className="text-right flex-shrink-0 space-y-1">
+        <p className="text-gray-400 text-xs sm:text-sm">
+          ♥ {formatCount(post.likes)} &nbsp; 💬 {formatCount(post.comments)} &nbsp; ↺ {formatCount(post.reposts)} &nbsp; ↗ {formatCount(post.shares)}
         </p>
-        <p className="text-gray-600 text-xs">reach {formatCount(post.reach)}</p>
+        <p className="text-gray-600 text-xs sm:text-sm">
+          reach {formatCount(post.reach)} &nbsp; 🔖 {formatCount(post.saves)}
+        </p>
       </div>
     </a>
   );
