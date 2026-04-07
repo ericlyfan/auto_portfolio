@@ -38,3 +38,6 @@ next-env.d.ts
 # uploads
 public/uploads/*
 !public/uploads/.gitkeep
+
+# worktrees
+.worktrees/
