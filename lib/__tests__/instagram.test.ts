@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMediaContainer, publishMedia } from "@/lib/instagram";
+import { createMediaContainer, publishMedia, getMediaList, getMediaInsights } from "@/lib/instagram";
 // Note: carousel functions are imported via dynamic import in each test to ensure env stubs are applied
 
 const mockFetch = vi.fn();
@@ -200,5 +200,97 @@ describe("createCarouselContainer", () => {
     await expect(
       createCarouselContainer(["item-001"], "caption")
     ).rejects.toThrow("Instagram API error: Too many children");
+  });
+});
+
+describe("getMediaList", () => {
+  it("fetches media list with correct fields and returns data array", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "media-1",
+            caption: "Velvia 100\nGreat day",
+            media_url: "https://cdn.instagram.com/photo1.jpg",
+            thumbnail_url: null,
+            timestamp: "2024-01-03T10:00:00+0000",
+            media_type: "IMAGE",
+            permalink: "https://www.instagram.com/p/abc/",
+          },
+        ],
+      }),
+    });
+
+    const result = await getMediaList(25);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://graph.facebook.com/v18.0/123456/media?fields=id%2Ccaption%2Cmedia_url%2Cthumbnail_url%2Ctimestamp%2Cmedia_type%2Cpermalink&limit=25&access_token=test-token"
+    );
+    expect(result).toEqual([
+      {
+        id: "media-1",
+        caption: "Velvia 100\nGreat day",
+        media_url: "https://cdn.instagram.com/photo1.jpg",
+        thumbnail_url: null,
+        timestamp: "2024-01-03T10:00:00+0000",
+        media_type: "IMAGE",
+        permalink: "https://www.instagram.com/p/abc/",
+      },
+    ]);
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: { message: "Invalid token" } }),
+    });
+
+    await expect(getMediaList(25)).rejects.toThrow(
+      "Instagram API error: Invalid token"
+    );
+  });
+});
+
+describe("getMediaInsights", () => {
+  it("fetches insights and returns mapped metrics object", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { name: "impressions", values: [{ value: 200 }] },
+          { name: "reach", values: [{ value: 150 }] },
+          { name: "likes", values: [{ value: 12 }] },
+          { name: "saved", values: [{ value: 4 }] },
+          { name: "comments_count", values: [{ value: 2 }] },
+          { name: "shares", values: [{ value: 1 }] },
+        ],
+      }),
+    });
+
+    const result = await getMediaInsights("media-1");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://graph.facebook.com/v18.0/media-1/insights?metric=impressions%2Creach%2Clikes%2Csaved%2Ccomments_count%2Cshares&access_token=test-token"
+    );
+    expect(result).toEqual({
+      impressions: 200,
+      reach: 150,
+      likes: 12,
+      saves: 4,
+      comments: 2,
+      shares: 1,
+    });
+  });
+
+  it("throws on API error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: { message: "Media not found" } }),
+    });
+
+    await expect(getMediaInsights("media-1")).rejects.toThrow(
+      "Instagram API error: Media not found"
+    );
   });
 });

@@ -140,3 +140,85 @@ export async function publishMedia(
 
   return { id: data.id };
 }
+
+export type IGMedia = {
+  id: string;
+  caption: string | null;
+  media_url: string;
+  thumbnail_url: string | null;
+  timestamp: string;
+  media_type: string;
+  permalink: string;
+};
+
+export type IGMediaInsights = {
+  impressions: number;
+  reach: number;
+  likes: number;
+  saves: number;
+  comments: number;
+  shares: number;
+};
+
+export async function getMediaList(limit: number): Promise<IGMedia[]> {
+  const userId = process.env.INSTAGRAM_USER_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  const params = new URLSearchParams({
+    fields: "id,caption,media_url,thumbnail_url,timestamp,media_type,permalink",
+    limit: String(limit),
+    access_token: accessToken!,
+  });
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${userId}/media?${params}`
+  );
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Instagram API error: ${data.error?.message ?? "Unknown error"}`
+    );
+  }
+
+  return data.data;
+}
+
+export async function getMediaInsights(
+  mediaId: string
+): Promise<IGMediaInsights> {
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+
+  const params = new URLSearchParams({
+    metric: "impressions,reach,likes,saved,comments_count,shares",
+    access_token: accessToken!,
+  });
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${mediaId}/insights?${params}`
+  );
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Instagram API error: ${data.error?.message ?? "Unknown error"}`
+    );
+  }
+
+  const map: Record<string, number> = {};
+  for (const item of data.data as Array<{
+    name: string;
+    values: Array<{ value: number }>;
+  }>) {
+    map[item.name] = item.values[item.values.length - 1]?.value ?? 0;
+  }
+
+  return {
+    impressions: map.impressions ?? 0,
+    reach: map.reach ?? 0,
+    likes: map.likes ?? 0,
+    saves: map.saved ?? 0,
+    comments: map.comments_count ?? 0,
+    shares: map.shares ?? 0,
+  };
+}
