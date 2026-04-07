@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PublishTab from "@/app/components/PublishTab";
 import HistoryTab from "@/app/components/HistoryTab";
+import StatsTab from "@/app/components/StatsTab";
 
 type Tab = "publish" | "history" | "stats";
 
@@ -36,9 +37,7 @@ export default function Home() {
       <div className="p-4 max-w-lg mx-auto">
         {tab === "publish" && <PublishTab />}
         {tab === "history" && <HistoryTab />}
-        {tab === "stats" && (
-          <p className="text-gray-500 text-sm">Stats coming soon</p>
-        )}
+        {tab === "stats" && <StatsTab />}
       </div>
     </main>
   );
