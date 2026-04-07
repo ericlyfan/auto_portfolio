@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMediaContainer, publishMedia, getMediaList, getMediaInsights } from "@/lib/instagram";
+import { createMediaContainer, publishMedia, getMediaList, getMediaInsights, getAccountInfo, refreshToken } from "@/lib/instagram";
 // Note: carousel functions are imported via dynamic import in each test to ensure env stubs are applied
 
 const mockFetch = vi.fn();
@@ -291,6 +291,90 @@ describe("getMediaInsights", () => {
 
     await expect(getMediaInsights("media-1")).rejects.toThrow(
       "Instagram API error: Media not found"
+    );
+  });
+});
+
+describe("getAccountInfo", () => {
+  it("fetches account fields and 28-day insights and returns merged object", async () => {
+    // First call: account fields
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        username: "ericfan",
+        followers_count: 4200,
+        media_count: 89,
+      }),
+    });
+    // Second call: insights
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          { name: "reach", values: [{ value: 18400 }] },
+          { name: "profile_views", values: [{ value: 342 }] },
+        ],
+      }),
+    });
+
+    const result = await getAccountInfo();
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "https://graph.facebook.com/v18.0/123456?fields=username%2Cfollowers_count%2Cmedia_count&access_token=test-token"
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "https://graph.facebook.com/v18.0/123456/insights?metric=reach%2Cprofile_views&period=days_28&access_token=test-token"
+    );
+    expect(result).toEqual({
+      username: "ericfan",
+      followersCount: 4200,
+      mediaCount: 89,
+      reach28d: 18400,
+      profileViews28d: 342,
+    });
+  });
+
+  it("throws on account fields API error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: { message: "Invalid token" } }),
+    });
+
+    await expect(getAccountInfo()).rejects.toThrow(
+      "Instagram API error: Invalid token"
+    );
+  });
+});
+
+describe("refreshToken", () => {
+  it("calls refresh endpoint and returns new access token", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        access_token: "new-token-abc",
+        token_type: "bearer",
+        expires_in: 5183944,
+      }),
+    });
+
+    const result = await refreshToken();
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=test-token"
+    );
+    expect(result).toBe("new-token-abc");
+  });
+
+  it("throws on refresh failure", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: { message: "Token expired" } }),
+    });
+
+    await expect(refreshToken()).rejects.toThrow(
+      "Instagram API error: Token expired"
     );
   });
 });
