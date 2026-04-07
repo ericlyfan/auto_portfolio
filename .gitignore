@@ -41,3 +41,6 @@ public/uploads/*
 
 # worktrees
 .worktrees/
+
+# brainstorm mockups
+.superpowers/
