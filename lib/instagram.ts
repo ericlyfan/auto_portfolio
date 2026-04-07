@@ -208,9 +208,10 @@ export async function getMediaInsights(
   const map: Record<string, number> = {};
   for (const item of data.data as Array<{
     name: string;
-    values: Array<{ value: number }>;
+    value?: number;
+    values?: Array<{ value: number }>;
   }>) {
-    map[item.name] = item.values[item.values.length - 1]?.value ?? 0;
+    map[item.name] = item.value ?? item.values?.[item.values.length - 1]?.value ?? 0;
   }
 
   return {
