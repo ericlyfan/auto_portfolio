@@ -346,6 +346,26 @@ describe("getAccountInfo", () => {
       "Instagram API error: Invalid token"
     );
   });
+
+  it("throws on insights API error", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          username: "ericfan",
+          followers_count: 4200,
+          media_count: 89,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: { message: "Insights unavailable" } }),
+      });
+
+    await expect(getAccountInfo()).rejects.toThrow(
+      "Instagram API error: Insights unavailable"
+    );
+  });
 });
 
 describe("refreshToken", () => {
